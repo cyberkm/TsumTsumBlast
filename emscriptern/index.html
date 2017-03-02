@@ -1,0 +1,88 @@
+<!doctype html>
+<html><head>
+<meta charset="UTF-8">
+<title>Tsum Tsum Blast</title>
+
+<script type="text/javascript">
+
+var ctx = null
+var drawOffsetX, drawOffsetY
+var canvasRect
+
+function start() 
+{
+	Module.initStart()
+	drawOffsetX = mycanvas.width*0.5
+	drawOffsetY = mycanvas.height
+	
+	requestAnimationFrame(animProgress)
+	ctx = mycanvas.getContext('2d')
+	
+	mycanvas.onmousedown = handleMouseDown
+    document.onmouseup = handleMouseUp
+    document.onmousemove = handleMouseMove
+	
+	canvasRect = mycanvas.getBoundingClientRect();
+
+}
+
+function doResize() {
+}
+
+function handleMouseDown(event)
+{
+}
+function handleMouseUp(event)
+{
+}
+function handleMouseMove(event)
+{
+	var cx = event.clientX - canvasRect.left
+	var cy = event.clientY - canvasRect.top
+	var x = (cx - drawOffsetX) * 0.01
+	var y = (cy - drawOffsetY) * -0.01
+	//console.log("~~ " + x + "  " + y)
+    Module.mouse_hover(x, y)
+}
+
+
+function animProgress() 
+{
+	ctx.clearRect(0, 0, mycanvas.width, mycanvas.height);	
+	Module.cpp_progress()
+	requestAnimationFrame(animProgress)
+}
+
+
+function drawCircle(x, y, col) 
+{
+	var sx = x * 100 + drawOffsetX;
+	var sy = y * -100 + drawOffsetY;
+	
+	//console.log("~~ " + x + " " + y + "   " + sx + " " + sy)
+
+	ctx.beginPath();
+	ctx.arc(sx, sy, 20, 0, 2 * Math.PI, false)
+	ctx.fillStyle = col
+	ctx.fill()
+	ctx.strokeStyle = '#777777'
+	ctx.stroke()
+	
+}
+
+</script>
+<script src="js_main.js"></script>
+<style>
+
+#mycanvas {
+	border: 1px solid black;
+}
+
+</style>
+</head>
+<body id="body" onload="start()" onresize="doResize()" >
+
+	<canvas id="mycanvas" width="800" height="800"></canvas>
+	
+</body>
+</html>
