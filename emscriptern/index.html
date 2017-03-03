@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html><head>
 <meta charset="UTF-8">
 <title>Tsum Tsum Blast</title>
@@ -8,6 +8,9 @@
 var ctx = null
 var drawOffsetX, drawOffsetY
 var canvasRect
+var mouseHoverPos = null, mouseUpPos = null
+
+var SCALE = 100
 
 function start() 
 {
@@ -29,46 +32,88 @@ function start()
 function doResize() {
 }
 
+function coordFromMouseEvent(event) {
+    var cx = event.clientX - canvasRect.left
+    var cy = event.clientY - canvasRect.top
+    var x = (cx - drawOffsetX) / SCALE
+    var y = (cy - drawOffsetY) / -SCALE
+    return [x,y]
+}
+function scrFromCoordX(x) {
+    return x * SCALE + drawOffsetX;
+}
+
+function scrFromCoordY(y) {
+    return y * -SCALE + drawOffsetY;
+}
+
 function handleMouseDown(event)
 {
 }
 function handleMouseUp(event)
 {
+    mouseUpPos = coordFromMouseEvent(event)
 }
 function handleMouseMove(event)
 {
-	var cx = event.clientX - canvasRect.left
-	var cy = event.clientY - canvasRect.top
-	var x = (cx - drawOffsetX) * 0.01
-	var y = (cy - drawOffsetY) * -0.01
-	//console.log("~~ " + x + "  " + y)
-    Module.mouse_hover(x, y)
+    //console.log("~~ " + x + "  " + y)
+    mouseHoverPos = coordFromMouseEvent(event)
 }
 
 
 function animProgress() 
 {
-	ctx.clearRect(0, 0, mycanvas.width, mycanvas.height);	
-	Module.cpp_progress()
+    if (mouseHoverPos != null) {
+        Module.mouse_hover(mouseHoverPos[0], mouseHoverPos[1])
+        mouseHoverPos = null
+    }
+    if (mouseUpPos != null) {
+        Module.mouse_up(mouseUpPos[0], mouseUpPos[1])
+        mouseUpPos = null
+    }
+
+    Module.cpp_progress()
+
+	ctx.clearRect(0, 0, mycanvas.width, mycanvas.height);
+	Module.cpp_draw()
 	requestAnimationFrame(animProgress)
 }
 
 
-function drawCircle(x, y, col) 
+function drawCircle(x, y, col, radius) 
 {
-	var sx = x * 100 + drawOffsetX;
-	var sy = y * -100 + drawOffsetY;
+    var sx = scrFromCoordX(x);
+    var sy = scrFromCoordY(y);
+    var sradius = radius * SCALE
 	
 	//console.log("~~ " + x + " " + y + "   " + sx + " " + sy)
 
 	ctx.beginPath();
-	ctx.arc(sx, sy, 20, 0, 2 * Math.PI, false)
+	ctx.arc(sx, sy, sradius, 0, 2 * Math.PI, false)
 	ctx.fillStyle = col
 	ctx.fill()
 	ctx.strokeStyle = '#777777'
 	ctx.stroke()
 	
 }
+
+function dbgPolyStart(x, y) {
+    ctx.beginPath()
+    var sx = scrFromCoordX(x);
+    var sy = scrFromCoordY(y);
+    ctx.moveTo(sx, sy);
+}
+function dbgPolyPoint(x, y) {
+    var sx = scrFromCoordX(x);
+    var sy = scrFromCoordY(y);
+    ctx.lineTo(sx, sy)
+}
+function dbgPolyEnd() {
+    ctx.closePath()
+    ctx.strokeStyle = '#ff00ff'
+    ctx.stroke()
+}
+
 
 </script>
 <script src="js_main.js"></script>
@@ -82,7 +127,7 @@ function drawCircle(x, y, col)
 </head>
 <body id="body" onload="start()" onresize="doResize()" >
 
-	<canvas id="mycanvas" width="800" height="800"></canvas>
+	<canvas id="mycanvas" width="800" height="700"></canvas>
 	
 </body>
 </html>
