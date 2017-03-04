@@ -15,10 +15,10 @@ using namespace std;
 class Sprite
 {
 public:
-	Sprite(const string& c, const string& hc) : m_color(c), m_hoverColor(hc)
+	Sprite(const string& c, const b2Color& bc) : m_color(c), m_blastColor(bc)
 	{}
 	string m_color;
-    string m_hoverColor;
+    b2Color m_blastColor;
 };
 
 class BallInfo
@@ -40,6 +40,7 @@ public:
     virtual ~Anim() {}
     // return false when the anim is done
     virtual bool progress() = 0;
+    virtual void draw() {}
 };
 
 
@@ -165,9 +166,9 @@ void Scene::initStart()
 
 	
     m_sprites.reserve(10);
-    m_sprites.push_back(Sprite("norm_red", "#ff4444"));
-    m_sprites.push_back(Sprite("norm_green", "#4444ff"));
-    m_sprites.push_back(Sprite("norm_blue", "#44ff44"));
+    m_sprites.push_back(Sprite("norm_red", b2Color(255, 0, 0)));
+    m_sprites.push_back(Sprite("norm_green", b2Color(0, 172, 0)));
+    m_sprites.push_back(Sprite("norm_blue", b2Color(0, 0, 255)));
 	
 	// Define the dynamic body. We set its position and call the body factory.
 	float px = -1.4;
@@ -332,22 +333,66 @@ void cpp_progress()
 
 void cpp_draw()
 {
-
+    bool hasHover = false;
     //printf("~~~ %d\n", g_scene->m_bodies.size());
 	for(auto* bd: g_scene->m_bodies)
 	{
+        auto* inf = getBallInfo(bd);
+        if (inf->m_inHoveredGroup) {
+            hasHover = true;
+            continue; 	
+        }
 		b2Vec2 position = bd->GetPosition();
 		float32 angle = bd->GetAngle();
-        auto* inf = getBallInfo(bd);
-        const string* col = nullptr;
-        //if (inf->m_inHoveredGroup)
-        //    col = &inf->m_sprite->m_hoverColor;
-        //else
-            col = &inf->m_sprite->m_color;
-		
-        //EM_ASM_(drawCircle($0, $1, Pointer_stringify($2), $3), position.x, position.y, col->c_str(), inf->m_radius);
-	
-        EM_ASM_(drawImg($0, $1, Pointer_stringify($2), $3, $4), position.x, position.y, col->c_str(), inf->m_radius, angle);
+        EM_ASM_(drawImg($0, $1, Pointer_stringify($2), $3, $4), position.x, position.y, inf->m_sprite->m_color.c_str(), inf->m_radius, angle);
+    }
+
+    if (hasHover)
+    {
+        // line
+	    for(auto* bd: g_scene->m_bodies)
+	    {
+            auto* inf = getBallInfo(bd);
+            if (!inf->m_inHoveredGroup)
+                continue; 	
+		    b2Vec2 position = bd->GetPosition();
+            EM_ASM_(drawCircle($0, $1, null, HOVER_OUTLINE_COL, $2+HOVER_OUTLINE_OFFSET), position.x, position.y, inf->m_radius);
+        }
+        // erase between lines
+	    for(auto* bd: g_scene->m_bodies)
+	    {
+            auto* inf = getBallInfo(bd);
+            if (!inf->m_inHoveredGroup)
+                continue; 	
+		    b2Vec2 position = bd->GetPosition();
+            EM_ASM_(drawCircle($0, $1, "#ffffff", null, $2+HOVER_OUTLINE_ERASE), position.x, position.y, inf->m_radius);
+        }
+        // balls
+	    for(auto* bd: g_scene->m_bodies)
+	    {
+            auto* inf = getBallInfo(bd);
+            if (!inf->m_inHoveredGroup) 
+                continue; 	
+		    b2Vec2 position = bd->GetPosition();
+		    float32 angle = bd->GetAngle();
+            EM_ASM_(drawImg($0, $1, Pointer_stringify($2), $3, $4), position.x, position.y, inf->m_sprite->m_color.c_str(), inf->m_radius, angle);
+        }
+        // alpha
+	    for(auto* bd: g_scene->m_bodies)
+	    {
+            auto* inf = getBallInfo(bd);
+            if (!inf->m_inHoveredGroup)
+                continue; 	
+		    b2Vec2 position = bd->GetPosition();
+            EM_ASM_(drawCircle($0, $1, HOVER_MASK_COL, null, $2), position.x, position.y, inf->m_radius + 0.01);
+        }
+    }
+
+    for(int i = 0; i < g_scene->m_anims.size(); ++ i) {
+        auto* anim = g_scene->m_anims[i];
+        if (anim == nullptr)
+            continue;
+        anim->draw();
     }
 
     //g_world->DrawDebugData();
@@ -411,11 +456,25 @@ class BlastAnim : public Anim
 {
 public:
     BlastAnim(b2Body* bd, int index) 
-        : m_bd(bd), m_frameProg(index * 2) // remove a layer each 3 frames
-    {}
+        : m_bd(bd), m_frameProg(index * 2) // remove a layer each 2 frames
+    {
+        // sample these before they get changed when the ball respawns
+        m_pos = m_bd->GetPosition();
+        auto* inf = getBallInfo(m_bd);
+        m_radius = inf->m_radius;
+        b2Color col = inf->m_sprite->m_blastColor;
+        m_colpre = "rgba(" + to_string((int)col.r) + "," + to_string((int)col.g) + "," +  to_string((int)col.b) + ",";
+
+        //printf("START %p  %f\n", this, m_radius);
+
+    }
     virtual bool progress();
+    virtual void draw();
 
     b2Body* m_bd;
+    b2Vec2 m_pos;
+    float m_radius;
+    string m_colpre;
     int m_frameProg;
 };
 
@@ -425,8 +484,18 @@ bool BlastAnim::progress() {
         return true;
     auto* inf = getBallInfo(m_bd);
     g_scene->blast(m_bd);
-    
+    if (m_frameProg > -10) 
+        return true;
     return false;
+}
+void BlastAnim::draw() {
+    if (m_frameProg > -10 && m_frameProg < 0) {
+        float alpha = 0.5 + (float)m_frameProg/20.0;
+        float radius = m_radius - (float)m_frameProg * 0.04;
+        //printf("ANIM %p  %f  %f\n", this, radius, alpha);
+        string cols = m_colpre + to_string(alpha) + ")";
+        EM_ASM_(drawCircle($0, $1, Pointer_stringify($2), null, $3), m_pos.x, m_pos.y, cols.c_str(), radius);
+    }
 }
 
 

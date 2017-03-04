@@ -13,6 +13,11 @@ var mouseHoverPos = null, mouseUpPos = null
 
 var SCALE = 100
 
+var HOVER_OUTLINE_COL = "#ff9924"
+var HOVER_MASK_COL = "rgba(255,255,255,0.3)"
+var HOVER_OUTLINE_ERASE = 0.014
+var HOVER_OUTLINE_OFFSET = 0.03
+
 function start() 
 {
     if (window.innerHeight < mycanvas.height)
@@ -83,7 +88,7 @@ function animProgress()
 }
 
 
-function drawCircle(x, y, col, radius) 
+function drawCircle(x, y, fillCol, strokeCol, radius) 
 {
     var sx = scrFromCoordX(x);
     var sy = scrFromCoordY(y);
@@ -93,10 +98,15 @@ function drawCircle(x, y, col, radius)
 
 	ctx.beginPath();
 	ctx.arc(sx, sy, sradius, 0, 2 * Math.PI, false)
-	ctx.fillStyle = col
-	ctx.fill()
-	ctx.strokeStyle = '#777777'
-	ctx.stroke()
+	if (fillCol) {
+	    ctx.fillStyle = fillCol
+	    ctx.fill()
+	}
+	if (strokeCol) {
+	    ctx.strokeStyle = strokeCol
+        ctx.lineWidth = 5
+	    ctx.stroke()
+	}
 	
 }
 
