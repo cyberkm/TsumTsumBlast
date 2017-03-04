@@ -12,59 +12,23 @@
 b2World *g_world = nullptr;
 using namespace std;
 
-class Sprite
-{
-public:
-	Sprite(const string& c, const b2Color& bc) : m_color(c), m_blastColor(bc)
-	{}
-	string m_color;
-    b2Color m_blastColor;
-};
-
-class BallInfo
-{
-public:
-    BallInfo(Sprite* sprite, int index, float radius) : m_sprite(sprite), m_index(index), m_radius(radius)
-    {}
-
-
-    Sprite* m_sprite = nullptr;
-    int m_index = -1;
-    bool m_inHoveredGroup = false;
-    bool m_visited = false; // temp for bfs
-    float m_radius = 0.0f;
-};
-
-class Anim {
-public:
-    virtual ~Anim() {}
-    // return false when the anim is done
-    virtual bool progress() = 0;
-    virtual void draw() {}
-};
+#define BALL_RADIUS 0.26f
+#define BALL_COUNT 120
+#define START_DROP_FROM 5 // initial drop
 
 
 class JsDebugDraw : public b2Draw
 {
 public:
-    JsDebugDraw() {}
-    ~JsDebugDraw() {}
-
 	void DrawPolygon(const b2Vec2* vertices, int32 vertexCount, const b2Color& color) override {
         DrawSolidPolygon(vertices, vertexCount, color);
     }
 	void DrawSolidPolygon(const b2Vec2* vertices, int32 vertexCount, const b2Color& color) override;
-
-    void DrawCircle(const b2Vec2& center, float32 radius, const b2Color& color) override
-    {}
-	void DrawSolidCircle(const b2Vec2& center, float32 radius, const b2Vec2& axis, const b2Color& color) override
-    {}
-	void DrawSegment(const b2Vec2& p1, const b2Vec2& p2, const b2Color& color) override
-    {}
-	void DrawTransform(const b2Transform& xf) override
-    {}
-	void DrawPoint(const b2Vec2& p, float32 size, const b2Color& color) override
-    {}
+    void DrawCircle(const b2Vec2& center, float32 radius, const b2Color& color) override {}
+	void DrawSolidCircle(const b2Vec2& center, float32 radius, const b2Vec2& axis, const b2Color& color) override {}
+	void DrawSegment(const b2Vec2& p1, const b2Vec2& p2, const b2Color& color) override {}
+	void DrawTransform(const b2Transform& xf) override {}
+    void DrawPoint(const b2Vec2& p, float32 size, const b2Color& color) override {}
 };
 
 JsDebugDraw *g_debugDraw = nullptr;
@@ -80,6 +44,84 @@ void JsDebugDraw::DrawSolidPolygon(const b2Vec2* vertices, int32 vertexCount, co
     EM_ASM(dbgPolyEnd());
 }
 
+
+
+class Sprite
+{
+public:
+	Sprite(const string& normal, const b2Color& bc, const string& laser) : m_blastColor(bc)
+	{
+        m_imgs[0] = normal;
+        m_imgs[1] = laser;
+    }
+	string m_imgs[2];
+    b2Color m_blastColor;
+};
+
+class BallInfo;
+
+class Ability
+{
+public:
+    virtual ~Ability() {}
+    virtual void onBlast(b2Body* bd) = 0;
+    virtual void progress(BallInfo* inf) = 0;
+    virtual bool drawOnIdle() const = 0;
+};
+
+class BallInfo
+{
+public:
+    BallInfo(Sprite* sprite, int index, float radius) : m_sprite(sprite), m_index(index), m_radius(radius), m_imgIndex(0)
+    {}
+
+    const string* getImg() const {
+        return &m_sprite->m_imgs[m_imgIndex];
+    }
+
+    Sprite* m_sprite = nullptr;
+    int m_index = -1;
+    bool m_inHoveredGroup = false;
+    bool m_visited = false; // temp for bfs
+    float m_radius = 0.0f;
+
+    Ability* m_ability = nullptr;
+    int m_imgIndex = 0; 
+    float m_addAngle = 0;
+
+};
+
+BallInfo* getBallInfo(b2Body* bd) {
+    return (BallInfo*)bd->GetUserData();
+}
+
+
+class Anim {
+public:
+    virtual ~Anim() {}
+    // return false when the anim is done
+    virtual bool progress() = 0;
+    virtual void draw() {}
+};
+
+
+
+class LaserAbility : public Ability
+{
+public:
+    LaserAbility(BallInfo* inf) {
+        inf->m_imgIndex = 1;
+    }
+    virtual void onBlast(b2Body* bd);
+    virtual void progress(BallInfo* inf) {
+        inf->m_addAngle += 0.01;
+        if (inf->m_addAngle > 2*M_PI)
+            inf->m_addAngle -= 2*M_PI;
+    }
+    virtual bool drawOnIdle() const {
+        return true;
+    }
+};
 
 class Scene
 {
@@ -104,9 +146,8 @@ public:
 };
 Scene *g_scene = nullptr;
 
-#define BALL_RADIUS 0.26f
-#define BALL_COUNT 120
-#define START_DROP_FROM 5
+
+
 
 void makeWalls(b2Body* groundBody)
 {
@@ -167,9 +208,9 @@ void Scene::initStart()
 
 	
     m_sprites.reserve(10);
-    m_sprites.push_back(Sprite("norm_red", b2Color(255, 0, 0)));
-    m_sprites.push_back(Sprite("norm_green", b2Color(0, 172, 0)));
-    m_sprites.push_back(Sprite("norm_blue", b2Color(0, 0, 255)));
+    m_sprites.push_back(Sprite("norm_red", b2Color(255, 0, 0), "laser_red"));
+    m_sprites.push_back(Sprite("norm_green", b2Color(0, 172, 0), "laser_green"));
+    m_sprites.push_back(Sprite("norm_blue", b2Color(0, 0, 255), "laser_blue"));
 	
 	// Define the dynamic body. We set its position and call the body factory.
 	float px = -1.4;
@@ -191,6 +232,9 @@ void Scene::initStart()
         //float randEpsilon = (((float)rand() / RAND_MAX) - 0.5) * 0.04;
         float radius = BALL_RADIUS + 0;//randEpsilon;
         m_binfos.push_back(BallInfo(&m_sprites[randCol], i, radius));
+        if (i == 53) {
+            m_binfos.back().m_ability = new LaserAbility(&m_binfos.back());
+        }
 
 		b2BodyDef bodyDef;
 		bodyDef.type = b2_dynamicBody;
@@ -216,9 +260,6 @@ void Scene::initStart()
 	}
 }
 
-BallInfo* getBallInfo(b2Body* bd) {
-    return (BallInfo*)bd->GetUserData();
-}
 
 
 template<typename FN>
@@ -235,7 +276,7 @@ void Scene::contactBfs(b2Body* start, const FN& callback)
     for( ;!q.empty(); q.pop()) 
     {
         if (iter++ > 100) {
-            printf("BUG!");
+            printf("BUG! BfsIter");
             break;
         }
         auto& entry = q.front();
@@ -273,7 +314,9 @@ void Scene::contactBfs(b2Body* start, const FN& callback)
          //   if (oinf != nullptr)
          //       printf("  CONT  id=%d dist=%f\n", oinf->m_index, d);
             q.push(make_pair(o, nextIndex));
-        }       // break;    }
+        }
+       // break;
+    }
 }
 
 void Scene::progress()
@@ -292,22 +335,53 @@ void Scene::progress()
             }
         }
     }
+
+    for(auto& inf: m_binfos) {
+        if (inf.m_ability) {
+            inf.m_ability->progress(&inf);
+        }
+    }
 }
 
 void Scene::addAnim(Anim* a) {
+    //printf("AddAnim %d\n", m_anims.size());
+    if (m_anims.size() > 200) {
+        printf("BUG! Anim-Overflow\n");
+        return;
+    }
     m_anims.push_back(a);
     ++m_activeAnims;
 }
 
 void Scene::blast(b2Body* bd)
 {
-    // respawm the ball in another color
     auto *inf = getBallInfo(bd);
+    // erase previous identity
     inf->m_inHoveredGroup = false;
+    if (inf->m_ability) 
+    {
+        //printf("Ability-onBlast id=%d", inf->m_index);
+        inf->m_ability->onBlast(bd);
+        delete inf->m_ability;
+        inf->m_ability = nullptr;
+        inf->m_imgIndex = 0;
+    }
+
+    // respawm the ball in another color
+
+    // new random color
     int randCol = rand() % g_scene->m_sprites.size();
     inf->m_sprite = &m_sprites[randCol];
 
-    bd->SetTransform(b2Vec2(0.0, 10.0), 0);
+    // random ability
+    float chs = rand() % 100;
+    if (chs <= 4) {
+        //printf("SETT-ABILITY id=%d %f\n", inf->m_index, chs);
+        inf->m_ability = new LaserAbility(inf);
+    }
+
+    bd->SetTransform(b2Vec2(0.0, 10.0), 0); // respawn above
+
 }
 
 
@@ -335,20 +409,22 @@ bool cpp_progress()
 }
 
 
-void cpp_draw()
+void cpp_draw(bool isIdle)
 {
     bool hasHover = false;
     //printf("~~~ %d\n", g_scene->m_bodies.size());
 	for(auto* bd: g_scene->m_bodies)
 	{
         auto* inf = getBallInfo(bd);
+        if (isIdle && !(inf->m_ability && inf->m_ability->drawOnIdle()))
+            continue;
         if (inf->m_inHoveredGroup) {
             hasHover = true;
             continue; 	
         }
 		b2Vec2 position = bd->GetPosition();
-		float32 angle = bd->GetAngle();
-        EM_ASM_(drawImg($0, $1, Pointer_stringify($2), $3, $4), position.x, position.y, inf->m_sprite->m_color.c_str(), inf->m_radius, angle);
+		float32 angle = bd->GetAngle() + inf->m_addAngle;
+        EM_ASM_(drawImg($0, $1, Pointer_stringify($2), $3, $4), position.x, position.y, inf->getImg()->c_str(), inf->m_radius, angle);
     }
 
     if (hasHover)
@@ -378,8 +454,8 @@ void cpp_draw()
             if (!inf->m_inHoveredGroup) 
                 continue; 	
 		    b2Vec2 position = bd->GetPosition();
-		    float32 angle = bd->GetAngle();
-            EM_ASM_(drawImg($0, $1, Pointer_stringify($2), $3, $4), position.x, position.y, inf->m_sprite->m_color.c_str(), inf->m_radius, angle);
+		    float32 angle = bd->GetAngle() + inf->m_addAngle;
+            EM_ASM_(drawImg($0, $1, Pointer_stringify($2), $3, $4), position.x, position.y, inf->getImg()->c_str(), inf->m_radius, angle);
         }
         // alpha
 	    for(auto* bd: g_scene->m_bodies)
@@ -465,6 +541,7 @@ public:
         // sample these before they get changed when the ball respawns
         m_pos = m_bd->GetPosition();
         auto* inf = getBallInfo(m_bd);
+        assert(inf != nullptr);
         m_radius = inf->m_radius;
         b2Color col = inf->m_sprite->m_blastColor;
         m_colpre = "rgba(" + to_string((int)col.r) + "," + to_string((int)col.g) + "," +  to_string((int)col.b) + ",";
@@ -486,8 +563,11 @@ bool BlastAnim::progress() {
     --m_frameProg;
     if (m_frameProg > 0)
         return true;
-    auto* inf = getBallInfo(m_bd);
-    g_scene->blast(m_bd);
+    //auto* inf = getBallInfo(m_bd);
+    if (m_frameProg == 0) {
+        g_scene->blast(m_bd);
+        return true;
+    }
     if (m_frameProg > -10) 
         return true;
     return false;
@@ -502,6 +582,28 @@ void BlastAnim::draw() {
     }
 }
 
+#define LASER_FRAMES 15
+
+class LaserAnim : public Anim
+{
+public:
+    LaserAnim(const b2Vec2& p1, const b2Vec2& p2) : m_p1(p1), m_p2(p2)
+    {}
+    virtual bool progress() {
+        ++m_frameProg;
+        return m_frameProg < LASER_FRAMES;
+    }
+    virtual void draw() {
+        float alpha = 0.8 - (float)m_frameProg/(float)LASER_FRAMES * 0.8;
+        int width = m_frameProg*4+5;
+        //printf("laser %f  %d\n", alpha, width);
+        string col = "rgba(0,128,255," + to_string(alpha) + ")";
+        EM_ASM_(drawLine($0, $1, $2, $3, $4, Pointer_stringify($5)), m_p1.x, m_p1.y, m_p2.x, m_p2.y, width, col.c_str());
+    }
+
+    int m_frameProg = 0;
+    b2Vec2 m_p1, m_p2;
+};
 
 void mouse_up(float x, float y)
 {
@@ -521,20 +623,70 @@ void mouse_up(float x, float y)
             if (count == 0)
                 first = a;
             else if (first != nullptr) { // add the blasts only on the second
+                //printf("up-anim-f ");
                 g_scene->addAnim(first);
                 g_scene->addAnim(a);
                 first = nullptr;
             }
-            else
+            else {
+                //printf("up-anim ");
                 g_scene->addAnim(a);
+            }
             ++count;
         });
 
         if (first != nullptr) // there was only one
             delete first;
-
+        if (count > 0) {
+            for(auto* bd: g_scene->m_bodies)
+                bd->SetAwake(true); // wake everybody up just in case the respawn didn't do it
+        }
     }
 }
+
+
+
+
+
+class LaserRayCastCallback : public b2RayCastCallback
+{
+public:
+    LaserRayCastCallback(const b2Vec2& start, b2Body* startBd) 
+        : m_startPos(start), m_startBody(startBd)
+    {}
+    float32 ReportFixture(b2Fixture* fixture, const b2Vec2& point, const b2Vec2& normal, float32 fraction) {
+        b2Body* bd = fixture->GetBody();
+        if (bd == m_startBody)
+            return 1.0; // avoid repeated blasts
+        auto* inf = getBallInfo(bd);
+        if (inf == nullptr)
+            return 1.0; // not a ball
+        //inf->m_inHoveredGroup = true;
+        float d = b2Distance(m_startPos, bd->GetPosition());
+        d /= BALL_RADIUS;
+        //printf("laser-anim ");
+        g_scene->addAnim(new BlastAnim(bd, (int)d));
+        return 1.0;
+    }
+
+    b2Vec2 m_startPos;
+    b2Body* m_startBody;
+};
+
+
+void LaserAbility::onBlast(b2Body* bd) 
+{
+    auto* inf = getBallInfo(bd);
+    float angle = bd->GetAngle() + inf->m_addAngle;
+    b2Vec2 dir = b2Vec2(10 * sinf(angle), 10 * cosf(angle));
+    b2Vec2 p1 = bd->GetPosition() - dir;
+    b2Vec2 p2 = bd->GetPosition() + dir;
+    LaserRayCastCallback lrc(bd->GetPosition(), bd);
+    g_world->RayCast(&lrc, p1, p2);
+    g_scene->addAnim(new LaserAnim(p1, p2));
+
+}
+
 
 
 EMSCRIPTEN_BINDINGS(my_module) 

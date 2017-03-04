@@ -82,7 +82,10 @@ function animProgress()
 
     if (Module.cpp_progress()) {
         ctx.clearRect(0, 0, mycanvas.width, mycanvas.height)
-        Module.cpp_draw()
+        Module.cpp_draw(false)
+    }
+    else {
+        Module.cpp_draw(true);
     }
 	requestAnimationFrame(animProgress)
 }
@@ -128,6 +131,22 @@ function drawImg(x, y, elemName, radius, angle)
     ctx.restore()
 }
 
+function drawLine(x1, y1, x2, y2, width, color)
+{
+    //console.log("LINE " + width + " " + color);
+    var sx1 = scrFromCoordX(x1);
+    var sy1 = scrFromCoordY(y1);
+    var sx2 = scrFromCoordX(x2);
+    var sy2 = scrFromCoordY(y2);
+    ctx.beginPath()
+    ctx.moveTo(sx1, sy1);
+    ctx.lineTo(sx2, sy2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width
+    ctx.stroke()
+}
+
+
 function dbgPolyStart(x, y) {
     ctx.beginPath()
     var sx = scrFromCoordX(x);
@@ -142,6 +161,7 @@ function dbgPolyPoint(x, y) {
 function dbgPolyEnd() {
     ctx.closePath()
     ctx.strokeStyle = '#ff00ff'
+    ctx.lineWidth = 1
     ctx.stroke()
 }
 
@@ -168,6 +188,10 @@ body {
     <img id="norm_red" src='norm_red.svg' style="display:none;" />
     <img id="norm_blue" src='norm_blue.svg' style="display:none;" />
     <img id="norm_green" src='norm_green.svg' style="display:none;" />
+
+    <img id="laser_red" src='laser_red.svg' style="display:none;" />
+    <img id="laser_blue" src='laser_blue.svg' style="display:none;" />
+    <img id="laser_green" src='laser_green.svg' style="display:none;" />
 
 </body>
 </html>
