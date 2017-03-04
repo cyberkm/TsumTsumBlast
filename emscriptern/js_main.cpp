@@ -100,6 +100,7 @@ public:
 
     vector<Anim*> m_anims;
     int m_activeAnims = 0;
+    bool m_needHoverDraw = false;
 };
 Scene *g_scene = nullptr;
 
@@ -195,6 +196,7 @@ void Scene::initStart()
 		bodyDef.type = b2_dynamicBody;
 		bodyDef.position.Set(px, py);
 		bodyDef.userData = &m_binfos.back();
+        bodyDef.allowSleep = true;
 		b2Body* body = g_world->CreateBody(&bodyDef);
 		m_bodies.push_back(body);
 
@@ -323,11 +325,13 @@ float32 timeStep = 1.0f / 60.0f;
 int32 velocityIterations = 6;
 int32 positionIterations = 2;
 
-void cpp_progress()
+bool cpp_progress()
 {
     g_scene->progress();
 	g_world->Step(timeStep, velocityIterations, positionIterations);
-
+   // printf("awake=%d\n", g_world->m_countAwake);
+    bool needDraw = g_world->m_countAwake > 0 || g_scene->m_needHoverDraw;
+    return needDraw;
 }
 
 
@@ -432,23 +436,23 @@ void mouse_hover(float x, float y)
 	
 	MouseCallback mc(x, y);
 	g_world->QueryAABB(&mc, qa);
+        
     
-       
-    //if (g_scene->m_lastHoverOn != mc.rb) 
+    //printf("$$ %p %p\n", g_scene->m_lastHoverOn, mc.rb);
+    for(auto& inf: g_scene->m_binfos)
+        inf.m_inHoveredGroup = false;
+    if (mc.rb != nullptr) 
     {
-        //printf("$$ %p %p\n", g_scene->m_lastHoverOn, mc.rb);
-        for(auto& inf: g_scene->m_binfos)
-            inf.m_inHoveredGroup = false;
-        if (mc.rb != nullptr) 
-        {
-            g_scene->contactBfs(mc.rb, [](b2Body* bd, int index) {
-                auto* inf = getBallInfo(bd);
-              //  printf("  IN-HOVER id=%d\n", inf->m_index);
-                inf->m_inHoveredGroup = true;
-            });
-        }
-        g_scene->m_lastHoverOn = mc.rb;
+        g_scene->contactBfs(mc.rb, [](b2Body* bd, int index) {
+            auto* inf = getBallInfo(bd);
+            //  printf("  IN-HOVER id=%d\n", inf->m_index);
+            inf->m_inHoveredGroup = true;
+        });
     }
+    g_scene->m_needHoverDraw = (mc.rb != g_scene->m_lastHoverOn);
+        
+    g_scene->m_lastHoverOn = mc.rb;
+
 }
 
 
@@ -490,7 +494,7 @@ bool BlastAnim::progress() {
 }
 void BlastAnim::draw() {
     if (m_frameProg > -10 && m_frameProg < 0) {
-        float alpha = 0.5 + (float)m_frameProg/20.0;
+        float alpha = 0.7 + (float)m_frameProg/10.0/0.7;
         float radius = m_radius - (float)m_frameProg * 0.04;
         //printf("ANIM %p  %f  %f\n", this, radius, alpha);
         string cols = m_colpre + to_string(alpha) + ")";
