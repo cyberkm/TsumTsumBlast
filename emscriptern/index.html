@@ -1,6 +1,7 @@
 ﻿<!doctype html>
 <html><head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tsum Tsum Blast</title>
 
 <script type="text/javascript">
@@ -14,6 +15,8 @@ var SCALE = 100
 
 function start() 
 {
+    if (window.innerHeight < mycanvas.height)
+        mycanvas.height = window.innerHeight * (mycanvas.width/window.innerWidth) // account for the scale done by the viewport
 	Module.initStart()
 	drawOffsetX = mycanvas.width*0.5
 	drawOffsetY = mycanvas.height
@@ -97,6 +100,24 @@ function drawCircle(x, y, col, radius)
 	
 }
 
+function drawImg(x, y, elemName, radius, angle)
+{
+    var im = document.getElementById(elemName)
+
+    var sx = scrFromCoordX(x);
+    var sy = scrFromCoordY(y);
+
+    var tr = -radius*SCALE
+    var sradius = radius * SCALE * 2
+
+    ctx.save()
+    ctx.translate(sx, sy)
+    ctx.rotate(angle)
+    ctx.translate(tr, tr)
+    ctx.drawImage(im, 0, 0, sradius, sradius);
+    ctx.restore()
+}
+
 function dbgPolyStart(x, y) {
     ctx.beginPath()
     var sx = scrFromCoordX(x);
@@ -121,13 +142,22 @@ function dbgPolyEnd() {
 
 #mycanvas {
 	border: 1px solid black;
+    display: block;
+    margin: auto;
+}
+body {
+    margin: 0;
 }
 
 </style>
 </head>
 <body id="body" onload="start()" onresize="doResize()" >
 
-	<canvas id="mycanvas" width="800" height="700"></canvas>
+	<canvas id="mycanvas" width="405" height="740"></canvas>
 	
+    <img id="norm_red" src='norm_red.svg' style="display:none;" />
+    <img id="norm_blue" src='norm_blue.svg' style="display:none;" />
+    <img id="norm_green" src='norm_green.svg' style="display:none;" />
+
 </body>
 </html>

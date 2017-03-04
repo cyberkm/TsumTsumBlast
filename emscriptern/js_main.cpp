@@ -165,9 +165,9 @@ void Scene::initStart()
 
 	
     m_sprites.reserve(10);
-    m_sprites.push_back(Sprite("#ff0000", "#ff4444"));
-    m_sprites.push_back(Sprite("#00bb00", "#44ff44"));
-    m_sprites.push_back(Sprite("#0000ff", "#4444ff"));
+    m_sprites.push_back(Sprite("norm_red", "#ff4444"));
+    m_sprites.push_back(Sprite("norm_green", "#4444ff"));
+    m_sprites.push_back(Sprite("norm_blue", "#44ff44"));
 	
 	// Define the dynamic body. We set its position and call the body factory.
 	float px = -1.4;
@@ -337,15 +337,18 @@ void cpp_draw()
 	for(auto* bd: g_scene->m_bodies)
 	{
 		b2Vec2 position = bd->GetPosition();
-		//float32 angle = bd->GetAngle();
+		float32 angle = bd->GetAngle();
         auto* inf = getBallInfo(bd);
         const string* col = nullptr;
-        if (inf->m_inHoveredGroup)
-            col = &inf->m_sprite->m_hoverColor;
-        else
+        //if (inf->m_inHoveredGroup)
+        //    col = &inf->m_sprite->m_hoverColor;
+        //else
             col = &inf->m_sprite->m_color;
-		EM_ASM_(drawCircle($0, $1, Pointer_stringify($2), $3), position.x, position.y, col->c_str(), inf->m_radius);
-	}
+		
+        //EM_ASM_(drawCircle($0, $1, Pointer_stringify($2), $3), position.x, position.y, col->c_str(), inf->m_radius);
+	
+        EM_ASM_(drawImg($0, $1, Pointer_stringify($2), $3, $4), position.x, position.y, col->c_str(), inf->m_radius, angle);
+    }
 
     //g_world->DrawDebugData();
 
